@@ -3,116 +3,85 @@
   "nodes": [
     {
       "parameters": {
-        "rule": {
-          "interval": [
-            {
-              "field": "hours"
-            }
-          ]
-        }
-      },
-      "type": "n8n-nodes-base.scheduleTrigger",
-      "typeVersion": 1.2,
-      "position": [-480, -16],
-      "id": "fb70f28c-cc08-401b-9c24-82df5ce8abf1",
-      "name": "Schedule Trigger"
-    },
-    {
-      "parameters": {
-        "url": "={{$env.JOB_ALERT_RSS_URL}}",
+        "url": "={{ $env.JOB_ALERT_RSS_URL }}",
         "options": {}
       },
       "type": "n8n-nodes-base.rssFeedRead",
       "typeVersion": 1.2,
-      "position": [-208, -16],
+      "position": [-240, -32],
       "id": "391fc97c-883b-4d0d-9da7-55b5b02091f4",
       "name": "RSS Read",
+      "retryOnFail": true,
       "alwaysOutputData": true
     },
     {
       "parameters": {
         "conditions": {
           "options": {
-            "ignoreCase": true
+            "caseSensitive": false,
+            "typeValidation": "loose",
+            "version": 2
           },
           "conditions": [
-            {
-              "leftValue": "={{$json.title}}",
-              "rightValue": "React",
-              "operator": {
-                "type": "string",
-                "operation": "contains"
-              }
-            },
-            {
-              "leftValue": "={{$json.title}}",
-              "rightValue": "MERN",
-              "operator": {
-                "type": "string",
-                "operation": "contains"
-              }
-            },
-            {
-              "leftValue": "={{$json.title}}",
-              "rightValue": "Full Stack",
-              "operator": {
-                "type": "string",
-                "operation": "contains"
-              }
-            }
+            { "leftValue": "={{$json.title}}", "rightValue": "React", "operator": { "type": "string", "operation": "contains" } },
+            { "leftValue": "={{$json.title}}", "rightValue": "MERN", "operator": { "type": "string", "operation": "contains" } },
+            { "leftValue": "={{$json.title}}", "rightValue": "Full Stack", "operator": { "type": "string", "operation": "contains" } },
+            { "leftValue": "={{$json.title}}", "rightValue": "Software Developer", "operator": { "type": "string", "operation": "contains" } },
+            { "leftValue": "={{$json.title}}", "rightValue": "Software Engineer", "operator": { "type": "string", "operation": "contains" } }
           ],
           "combinator": "or"
         }
       },
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
-      "position": [16, -16],
+      "position": [-16, -32],
       "id": "6f9d2b4a-39ff-49a9-a642-9dc213d7f899",
-      "name": "If",
-      "alwaysOutputData": true
+      "name": "If"
     },
     {
       "parameters": {
-        "jsCode": "// Persistent memory for deduplication\nconst staticData = $getWorkflowStaticData('global');\n\nif (!staticData.sentJobs) {\n  staticData.sentJobs = [];\n}\n\nconst newItems = items.filter(item => {\n  const link = item.json.link;\n\n  if (staticData.sentJobs.includes(link)) return false;\n\n  staticData.sentJobs.push(link);\n  return true;\n});\n\nstaticData.sentJobs = staticData.sentJobs.slice(-200);\n\nreturn newItems;"
-      },
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [368, -128],
-      "id": "11162fce-af09-41eb-a859-1999a6a498e5",
-      "name": "Deduplicate Jobs",
-      "alwaysOutputData": true
-    },
-    {
-      "parameters": {
-        "sendTo": "={{$env.JOB_ALERT_EMAIL_TO}}",
-        "subject": "={{$env.JOB_ALERT_EMAIL_SUBJECT}}",
-        "message": "=<b>New React / MERN Jobs Found</b><br><br>{{ $items().map((item, index) => `<hr><b>Job ${index + 1}</b><br><b>Title:</b> ${item.json.title}<br><b>Description:</b> ${item.json.contentSnippet}<br><b>Link:</b> <a href='${item.json.link}'>View Job</a><br><b>Posted:</b> ${item.json.pubDate}<br>`).join('') }}"
+        "sendTo": "={{ $env.JOB_ALERT_EMAIL_TO }}",
+        "subject": "={{ $env.JOB_ALERT_EMAIL_SUBJECT }}",
+        "message": "=<b>New React / MERN Jobs Found</b><br><br>\n\n{{\n  $items(\"Code in JavaScript\")\n    .filter(item => item.json.title && item.json.link)\n    .map((item, index) => `\n      <hr>\n      <b>Job ${index + 1}</b><br>\n      <b>Title:</b> ${item.json.title}<br>\n      <b>Description:</b> ${item.json.contentSnippet || \"N/A\"}<br>\n      <b>Link:</b> <a href=\"${item.json.link}\" target=\"_blank\">Apply Here</a><br>\n      <b>Posted:</b> ${item.json.pubDate ? new Date(item.json.pubDate).toLocaleString() : item.json.isoDate ? new Date(item.json.isoDate).toLocaleString() : \"N/A\"}<br>\n    `)\n    .join('')\n}}",
+        "options": { "appendAttribution": false }
       },
       "type": "n8n-nodes-base.gmail",
       "typeVersion": 2.1,
-      "position": [656, -16],
+      "position": [832, -64],
       "id": "4495d80b-6792-4673-b51a-6721faa8be4c",
-      "name": "Send Email",
-      "executeOnce": true,
-      "alwaysOutputData": true
+      "name": "Send a message",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "TJWbQERieKyKcEcB",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// ===============================\n// Persistent memory (survives runs)\n// ===============================\nconst staticData = $getWorkflowStaticData('global');\n\n// Initialize memory once\nif (!staticData.sentJobs) {\n  staticData.sentJobs = [];\n}\n\n// Always get items this way in n8n\nconst items = $input.all();\n\n// Debug object (acts like console)\nconst debug = [];\n\ndebug.push({\n  step: \"START\",\n  storedJobsBefore: staticData.sentJobs.length,\n  incomingItems: items.length,\n});\n\n// Words that indicate CLOSED jobs\nconst CLOSED_KEYWORDS = [\n  \"no longer accepting\",\n  \"applications closed\",\n  \"position closed\",\n  \"not accepting\",\n  \"closed\",\n];\n\n// Helper: check if job is closed\nfunction isJobClosed(item) {\n  const text =\n    `${item.json.title || \"\"} ${item.json.content || \"\"} ${item.json.contentSnippet || \"\"}`\n      .toLowerCase();\n\n  return CLOSED_KEYWORDS.some(keyword => text.includes(keyword));\n}\n\nconst newItems = [];\n\nfor (const item of items) {\n  const title = item.json.title;\n  const link = item.json.link;\n\n  // Skip invalid items\n  if (!title || !link) {\n    debug.push({\n      step: \"SKIP\",\n      reason: \"Missing title or link\",\n      title,\n      link,\n    });\n    continue;\n  }\n\n  // Skip closed jobs\n  if (isJobClosed(item)) {\n    debug.push({\n      step: \"SKIP\",\n      reason: \"Job closed / not accepting\",\n      title,\n    });\n    continue;\n  }\n\n  // Skip duplicates\n  if (staticData.sentJobs.includes(link)) {\n    debug.push({\n      step: \"DUPLICATE\",\n      link,\n    });\n    continue;\n  }\n\n  // ✅ New valid job\n  staticData.sentJobs.push(link);\n  newItems.push(item);\n\n  debug.push({\n    step: \"NEW_JOB_ADDED\",\n    title,\n    link,\n    totalStored: staticData.sentJobs.length,\n  });\n}\n\n// Keep memory limited\nstaticData.sentJobs = staticData.sentJobs.slice(-200);\n\ndebug.push({\n  step: \"END\",\n  newJobsCount: newItems.length,\n});\n\n// ❌ NO NEW JOBS → STOP (NO EMAIL)\n// if (newItems.length === 0) {\n//   return [\n//     {\n//       json: {\n//         status: \"NO_NEW_JOBS\",\n//         message: \"No new valid jobs found\",\n//         debug,\n//       },\n//     },\n//   ];\n// }\n\nif (newItems.length === 0) {\n  return []; // ❌ ZERO items → workflow STOPS\n}\n\n\n// ✅ NEW JOBS → SEND EMAIL\nreturn [\n  {\n    json: {\n      status: \"NEW_JOBS_FOUND\",\n      count: newItems.length,\n      debug,\n    },\n  },\n  ...newItems,\n];\n\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [256, -208],
+      "id": "11162fce-af09-41eb-a859-1999a6a498e5",
+      "name": "Code in JavaScript"
+    },
+    {
+      "parameters": { "rule": { "interval": [{ "field": "hours" }] } },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [-464, -32],
+      "id": "1fcddcbe-2f08-4da5-9a6f-ed1d0c06bb4c",
+      "name": "Schedule Trigger"
     }
   ],
   "connections": {
-    "Schedule Trigger": {
-      "main": [[{ "node": "RSS Read", "type": "main", "index": 0 }]]
-    },
-    "RSS Read": {
-      "main": [[{ "node": "If", "type": "main", "index": 0 }]]
-    },
-    "If": {
-      "main": [[{ "node": "Deduplicate Jobs", "type": "main", "index": 0 }]]
-    },
-    "Deduplicate Jobs": {
-      "main": [[{ "node": "Send Email", "type": "main", "index": 0 }]]
-    }
+    "Schedule Trigger": { "main": [[{ "node": "RSS Read", "type": "main" }]] },
+    "RSS Read": { "main": [[{ "node": "If", "type": "main" }]] },
+    "If": { "main": [[{ "node": "Code in JavaScript", "type": "main" }]] },
+    "Code in JavaScript": { "main": [[{ "node": "Send a message", "type": "main" }]] }
   },
   "active": true,
-  "settings": {
-    "timezone": "Asia/Kolkata"
-  }
+  "settings": { "timezone": "Asia/Kolkata" }
 }
