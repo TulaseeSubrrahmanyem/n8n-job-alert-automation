@@ -1,0 +1,118 @@
+{
+  "name": "Automated Job Alert System (n8n + Google Alerts + Gmail)",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [-480, -16],
+      "id": "fb70f28c-cc08-401b-9c24-82df5ce8abf1",
+      "name": "Schedule Trigger"
+    },
+    {
+      "parameters": {
+        "url": "={{$env.JOB_ALERT_RSS_URL}}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.rssFeedRead",
+      "typeVersion": 1.2,
+      "position": [-208, -16],
+      "id": "391fc97c-883b-4d0d-9da7-55b5b02091f4",
+      "name": "RSS Read",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "ignoreCase": true
+          },
+          "conditions": [
+            {
+              "leftValue": "={{$json.title}}",
+              "rightValue": "React",
+              "operator": {
+                "type": "string",
+                "operation": "contains"
+              }
+            },
+            {
+              "leftValue": "={{$json.title}}",
+              "rightValue": "MERN",
+              "operator": {
+                "type": "string",
+                "operation": "contains"
+              }
+            },
+            {
+              "leftValue": "={{$json.title}}",
+              "rightValue": "Full Stack",
+              "operator": {
+                "type": "string",
+                "operation": "contains"
+              }
+            }
+          ],
+          "combinator": "or"
+        }
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [16, -16],
+      "id": "6f9d2b4a-39ff-49a9-a642-9dc213d7f899",
+      "name": "If",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// Persistent memory for deduplication\nconst staticData = $getWorkflowStaticData('global');\n\nif (!staticData.sentJobs) {\n  staticData.sentJobs = [];\n}\n\nconst newItems = items.filter(item => {\n  const link = item.json.link;\n\n  if (staticData.sentJobs.includes(link)) return false;\n\n  staticData.sentJobs.push(link);\n  return true;\n});\n\nstaticData.sentJobs = staticData.sentJobs.slice(-200);\n\nreturn newItems;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [368, -128],
+      "id": "11162fce-af09-41eb-a859-1999a6a498e5",
+      "name": "Deduplicate Jobs",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "sendTo": "={{$env.JOB_ALERT_EMAIL_TO}}",
+        "subject": "={{$env.JOB_ALERT_EMAIL_SUBJECT}}",
+        "message": "=<b>New React / MERN Jobs Found</b><br><br>{{ $items().map((item, index) => `<hr><b>Job ${index + 1}</b><br><b>Title:</b> ${item.json.title}<br><b>Description:</b> ${item.json.contentSnippet}<br><b>Link:</b> <a href='${item.json.link}'>View Job</a><br><b>Posted:</b> ${item.json.pubDate}<br>`).join('') }}"
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [656, -16],
+      "id": "4495d80b-6792-4673-b51a-6721faa8be4c",
+      "name": "Send Email",
+      "executeOnce": true,
+      "alwaysOutputData": true
+    }
+  ],
+  "connections": {
+    "Schedule Trigger": {
+      "main": [[{ "node": "RSS Read", "type": "main", "index": 0 }]]
+    },
+    "RSS Read": {
+      "main": [[{ "node": "If", "type": "main", "index": 0 }]]
+    },
+    "If": {
+      "main": [[{ "node": "Deduplicate Jobs", "type": "main", "index": 0 }]]
+    },
+    "Deduplicate Jobs": {
+      "main": [[{ "node": "Send Email", "type": "main", "index": 0 }]]
+    }
+  },
+  "active": true,
+  "settings": {
+    "timezone": "Asia/Kolkata"
+  }
+}
